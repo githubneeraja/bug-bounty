@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+"""
+Interactive .env Configuration Setup
+Helps configure the environment variables for the recon automation bot
+"""
+
+import os
+import sys
+from pathlib import Path
+
+
+def print_header(title):
+    """Print formatted header"""
+    print("\n" + "="*70)
+    print(f"  {title}")
+    print("="*70)
+
+
+def print_info(message):
+    """Print info message"""
+    print(f"ℹ️  {message}")
+
+
+def print_success(message):
+    """Print success message"""
+    print(f"✅ {message}")
+
+
+def print_warning(message):
+    """Print warning message"""
+    print(f"⚠️  {message}")
+
+
+def get_input(prompt, required=True, default=None):
+    """Get user input with validation"""
+    while True:
+        if default:
+            user_input = input(f"{prompt} [{default}]: ").strip()
+            if not user_input:
+                return default
+        else:
+            user_input = input(f"{prompt}: ").strip()
+        
+        if user_input or not required:
+            return user_input
+        
+        print_warning("This field is required")
+
+
+def validate_webhook_url(url):
+    """Validate webhook URL format"""
+    if not url:
+        return False
+    return url.startswith('https://hook.make.com/')
+
+
+def validate_api_key(key):
+    """Validate API key format"""
+    if not key:
+        return False
+    return len(key) > 10
+
+
+def setup_make_config():
+    """Setup Make.com configuration"""
+    print_header("Make.com Webhook Configuration")
+    
+    print_info("Get your webhook URL from Make.com:")
+    print_info("1. Go to https://make.com")
+    print_info("2. Create or open a scenario")
+    print_info("3. Add 'Custom Webhook' as trigger")
+    print_info("4. Copy the webhook URL")
+    
+    while True:
+        webhook_url = get_input("Enter Make.com Webhook URL")
+        
+        if validate_webhook_url(webhook_url):
+            print_success(f"Webhook URL: {webhook_url}")
+            return webhook_url
+        else:
+            print_warning("Invalid webhook URL format")
+            print_info("Expected format: https://hook.make.com/...")
+
+
+def setup_google_config():
+    """Setup Google APIs configuration"""
+    print_header("Google APIs Configuration")
+    
+    print_info("Get your API keys from Google Cloud Console:")
+    print_info("1. Go to https://console.cloud.google.com")
+    print_info("2. Create a new project")
+    print_info("3. Enable Gemini API and Google Docs API")
+    print_info("4. Create API credentials")
+    
+    gemini_key = get_input("Enter Gemini API Key", required=True)
+    
+    if not validate_api_key(gemini_key):
+        print_warning("API key seems too short, but continuing...")
+    
+    google_key = get_input("Enter Google API Key", required=True)
+    
+    if not validate_api_key(google_key):
+        print_warning("API key seems too short, but continuing...")
+    
+    credentials_file = get_input(
+        "Enter Google Credentials File path",
+        required=False,
+        default="google_credentials.json"
+    )
+    
+    return {
+        'gemini_key': gemini_key,
+        'google_key': google_key,
+        'credentials_file': credentials_file
+    }
+
+
+def setup_shodan_config():
+    """Setup Shodan configuration"""
+    print_header("Shodan API Configuration")
+    
+    print_info("Get your API key from Shodan:")
+    print_info("1. Go to https://www.shodan.io")
+    print_info("2. Create an account or login")
+    print_info("3. Go to Account > API")
+    print_info("4. Copy your API key")
+    
+    shodan_key = get_input("Enter Shodan API Key", required=True)
+    
+    if not validate_api_key(shodan_key):
+        print_warning("API key seems too short, but continuing...")
+    
+    return shodan_key
+
+
+def setup_censys_config():
+    """Setup Censys configuration (optional)"""
+    print_header("Censys API Configuration (Optional)")
+    
+    use_censys = input("Do you want to configure Censys? (y/n) [n]: ").strip().lower()
+    
+    if use_censys != 'y':
+        print_info("Skipping Censys configuration")
+        return None
+    
+    print_info("Get your API credentials from Censys:")
+    print_info("1. Go to https://censys.io")
+    print_info("2. Create an account or login")
+    print_info("3. Go to Account > API")
+    print_info("4. Copy your API ID and Secret")
+    
+    api_id = get_input("Enter Censys API ID", required=False)
+    api_secret = get_input("Enter Censys API Secret", required=False)
+    
+    if api_id and api_secret:
+        return {'api_id': api_id, 'api_secret': api_secret}
+    
+    return None
+
+
+def create_env_file(config):
+    """Create .env file with configuration"""
+    print_header("Creating .env File")
+    
+    env_content = f"""# ============================================================================
+# RECON AUTOMATION BOT - ENVIRONMENT CONFIGURATION
+# ============================================================================
+# Generated by setup_env.py
+# DO NOT commit this file to version control
+# ============================================================================
+
+# Make.com Webhook Configuration
+MAKE_WEBHOOK_URL={config['webhook_url']}
+
+# Google APIs Configuration
+GEMINI_API_KEY={config['google']['gemini_key']}
+GOOGLE_API_KEY={config['google']['google_key']}
+GOOGLE_CREDENTIALS_FILE={config['google']['credentials_file']}
+
+# Shodan API Configuration
+SHODAN_API_KEY={config['shodan_key']}
+"""
+    
+    if config.get('censys'):
+        env_content += f"""
+# Censys API Configuration
+CENSYS_API_ID={config['censys']['api_id']}
+CENSYS_API_SECRET={config['censys']['api_secret']}
+"""
+    
+    env_content += """
+# ============================================================================
+# OPTIONAL CONFIGURATION
+# ============================================================================
+# LOG_LEVEL=INFO
+# LOG_FILE=recon_bot.log
+# NMAP_PORTS=1-1000
+# NMAP_SSL_PORT=443
+# REQUEST_TIMEOUT=30
+"""
+    
+    # Write to file
+    env_path = Path('.env')
+    
+    if env_path.exists():
+        overwrite = input("⚠️  .env file already exists. Overwrite? (y/n) [n]: ").strip().lower()
+        if overwrite != 'y':
+            print_warning("Skipping .env file creation")
+            return False
+    
+    try:
+        with open(env_path, 'w') as f:
+            f.write(env_content)
+        
+        print_success(f".env file created: {env_path.absolute()}")
+        
+        # Set file permissions (Unix-like systems)
+        try:
+            os.chmod(env_path, 0o600)
+            print_success("File permissions set to 600 (secure)")
+        except:
+            pass
+        
+        return True
+    
+    except Exception as e:
+        print(f"❌ Error creating .env file: {e}")
+        return False
+
+
+def verify_configuration(config):
+    """Verify configuration"""
+    print_header("Configuration Summary")
+    
+    print(f"Make.com Webhook: {config['webhook_url'][:50]}...")
+    print(f"Gemini API Key: {config['google']['gemini_key'][:20]}...")
+    print(f"Google API Key: {config['google']['google_key'][:20]}...")
+    print(f"Shodan API Key: {config['shodan_key'][:20]}...")
+    
+    if config.get('censys'):
+        print(f"Censys API ID: {config['censys']['api_id'][:20]}...")
+    
+    confirm = input("\n✅ Is this configuration correct? (y/n) [y]: ").strip().lower()
+    
+    return confirm != 'n'
+
+
+def main():
+    """Main setup flow"""
+    print_header("RECON AUTOMATION BOT - ENVIRONMENT SETUP")
+    
+    print_info("This script will help you configure the .env file")
+    print_info("You'll need API keys from:")
+    print_info("  - Make.com (webhook URL)")
+    print_info("  - Google Cloud (Gemini & Google Docs APIs)")
+    print_info("  - Shodan (service discovery)")
+    print_info("  - Censys (optional)")
+    
+    input("\nPress Enter to continue...")
+    
+    # Collect configuration
+    config = {
+        'webhook_url': setup_make_config(),
+        'google': setup_google_config(),
+        'shodan_key': setup_shodan_config(),
+        'censys': setup_censys_config()
+    }
+    
+    # Verify configuration
+    if not verify_configuration(config):
+        print_warning("Setup cancelled")
+        return False
+    
+    # Create .env file
+    if not create_env_file(config):
+        return False
+    
+    # Success
+    print_header("Setup Complete!")
+    
+    print_success("Configuration saved to .env")
+    print_info("Next steps:")
+    print_info("1. Run: python test_webhook.py")
+    print_info("2. Verify webhook connection")
+    print_info("3. Run: python recon_automation_bot.py example.com")
+    
+    return True
+
+
+if __name__ == "__main__":
+    try:
+        success = main()
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Setup cancelled by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\n❌ Error: {e}")
+        sys.exit(1)
+
