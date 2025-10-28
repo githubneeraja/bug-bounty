@@ -6,7 +6,7 @@ A Python-based pipeline to automate reconnaissance for bug bounty:
 
 ---
 
-## Project overview
+## Project Overview
 **Name:** `recon_automation_bot`  
 **Purpose:** Automate subdomain enumeration, service fingerprinting, port and SSL/TLS checks, then summarize findings into a human-readable report stored in Google Docs.  
 **Core tools:** Python 3.11+, Amass, Shodan API, Nmap (via Docker), Make.com, Google Gemini AI.
